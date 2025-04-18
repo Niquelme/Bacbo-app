@@ -1,0 +1,71 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+from collections import Counter
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+
+st.set_page_config(page_title="Bac Bo Predictor", layout="centered")
+st.title("🔮 Previsão do Bac Bo com IA")
+
+# Emojis para representar os resultados
+cores = {'vermelho': '🔴', 'azul': '🔵', 'amarelo': '🟡'}
+
+# Inicialização do histórico
+if 'historico' not in st.session_state:
+    st.session_state.historico = []
+
+# Entrada do novo resultado
+opcao = st.selectbox("Resultado mais recente:", ["", "vermelho", "azul", "amarelo"])
+if opcao:
+    st.session_state.historico.append(opcao)
+
+# Mostrar histórico com emojis
+st.subheader("Histórico")
+if st.session_state.historico:
+    st.write(" ".join([cores[c] for c in st.session_state.historico]))
+else:
+    st.write("Nenhum resultado ainda.")
+
+# Análise simples
+def analyze_sequence(seq):
+    contagem = Counter(seq)
+    st.write(f"Contagem: {dict(contagem)}")
+    df = pd.DataFrame.from_dict(contagem, orient='index', columns=['Frequência'])
+    df.plot(kind='bar', legend=False, color=['red', 'blue', 'gold'])
+    st.pyplot(plt.gcf())
+    plt.clf()
+
+# Previsão usando IA
+def prever(historico, window=10):
+    if len(historico) <= window:
+        return "Aguardando mais dados..."
+    
+    data = []
+    labels = []
+    for i in range(len(historico) - window):
+        data.append(historico[i:i + window])
+        labels.append(historico[i + window])
+
+    df_X = pd.DataFrame(data, columns=[f'p{i}' for i in range(window)])
+    df_X = pd.get_dummies(df_X, prefix_sep='_')
+    le = LabelEncoder().fit(['vermelho', 'azul', 'amarelo'])
+    y = le.transform(labels)
+
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(df_X, y)
+
+    last_seq = historico[-window:]
+    df_input = pd.DataFrame([last_seq], columns=[f'p{i}' for i in range(window)])
+    df_input = pd.get_dummies(df_input, prefix_sep='_')
+    df_input = df_input.reindex(columns=df_X.columns, fill_value=0)
+
+    pred = model.predict(df_input)[0]
+    return le.inverse_transform([pred])[0]
+
+# Mostrar análise e previsão
+if len(st.session_state.historico) >= 3:
+    analyze_sequence(st.session_state.historico)
+if len(st.session_state.historico) >= 10:
+    previsao = prever(st.session_state.historico)
+    st.success(f"Previsão do próximo: {cores.get(previsao, previsao)}")
